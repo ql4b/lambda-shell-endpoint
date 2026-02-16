@@ -1,0 +1,104 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"net"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
+)
+
+type runtimeAPIClient struct {
+	host string
+}
+
+func newRuntimeAPIClient(address string) *runtimeAPIClient {
+	return &runtimeAPIClient{address}
+}
+
+func (c *runtimeAPIClient) getNextInvocation() (string, []byte, error) {
+	conn, err := net.Dial("tcp", c.host)
+	if err != nil {
+		return "", nil, err
+	}
+	defer conn.Close()
+	
+	fmt.Fprintf(conn, "GET /2018-06-01/runtime/invocation/next HTTP/1.1\r\nHost: %s\r\n\r\n", c.host)
+	
+	reader := bufio.NewReader(conn)
+	var requestID string
+	var contentLength int
+	
+	for {
+		line, _ := reader.ReadString('\n')
+		if strings.HasPrefix(line, "Lambda-Runtime-Aws-Request-Id:") {
+			requestID = strings.TrimSpace(line[31:])
+		}
+		if strings.HasPrefix(line, "Content-Length:") {
+			contentLength, _ = strconv.Atoi(strings.TrimSpace(line[16:]))
+		}
+		if line == "\r\n" {
+			break
+		}
+	}
+	
+	body := make([]byte, contentLength)
+	reader.Read(body)
+	return requestID, body, nil
+}
+
+func (c *runtimeAPIClient) sendResponse(requestID string, response []byte) error {
+	conn, err := net.Dial("tcp", c.host)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	
+	fmt.Fprintf(conn, "POST /2018-06-01/runtime/invocation/%s/response HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\n\r\n%s", requestID, c.host, len(response), response)
+	return nil
+}
+
+func (c *runtimeAPIClient) sendError(requestID, errorMsg string) error {
+	conn, err := net.Dial("tcp", c.host)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	
+	errorPayload := `{"errorMessage": "` + errorMsg + `", "errorType": "Runtime.HandlerError"}`
+	fmt.Fprintf(conn, "POST /2018-06-01/runtime/invocation/%s/error HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\n\r\n%s", requestID, c.host, len(errorPayload), errorPayload)
+	return nil
+}
+
+func executeShellHandler(handlerFile, handlerFunc string, eventData []byte) ([]byte, error) {
+	cmd := exec.Command("bash", "-c", "source "+handlerFile+" && "+handlerFunc)
+	cmd.Stdin = strings.NewReader(string(eventData))
+	return cmd.Output()
+}
+
+func main() {
+	runtimeAPI := os.Getenv("AWS_LAMBDA_RUNTIME_API")
+	handler := os.Getenv("_HANDLER")
+	parts := strings.Split(handler, ".")
+	handlerFile := parts[0] + ".sh"
+	handlerFunc := parts[1]
+
+	client := newRuntimeAPIClient(runtimeAPI)
+
+	for {
+		requestID, eventData, err := client.getNextInvocation()
+		if err != nil {
+			continue
+		}
+
+		response, err := executeShellHandler(handlerFile, handlerFunc, eventData)
+		if err != nil {
+			client.sendError(requestID, err.Error())
+			continue
+		}
+
+		client.sendResponse(requestID, response)
+	}
+}
