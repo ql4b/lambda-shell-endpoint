@@ -24,13 +24,13 @@ func (c *runtimeAPIClient) getNextInvocation() (string, []byte, error) {
 		return "", nil, err
 	}
 	defer conn.Close()
-	
+
 	fmt.Fprintf(conn, "GET /2018-06-01/runtime/invocation/next HTTP/1.1\r\nHost: %s\r\n\r\n", c.host)
-	
+
 	reader := bufio.NewReader(conn)
 	var requestID string
 	var contentLength int
-	
+
 	for {
 		line, _ := reader.ReadString('\n')
 		if strings.HasPrefix(line, "Lambda-Runtime-Aws-Request-Id:") {
@@ -43,7 +43,7 @@ func (c *runtimeAPIClient) getNextInvocation() (string, []byte, error) {
 			break
 		}
 	}
-	
+
 	body := make([]byte, contentLength)
 	reader.Read(body)
 	return requestID, body, nil
@@ -55,7 +55,7 @@ func (c *runtimeAPIClient) sendResponse(requestID string, response []byte) error
 		return err
 	}
 	defer conn.Close()
-	
+
 	fmt.Fprintf(conn, "POST /2018-06-01/runtime/invocation/%s/response HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\n\r\n%s", requestID, c.host, len(response), response)
 	return nil
 }
@@ -66,7 +66,7 @@ func (c *runtimeAPIClient) sendError(requestID, errorMsg string) error {
 		return err
 	}
 	defer conn.Close()
-	
+
 	errorPayload := `{"errorMessage": "` + errorMsg + `", "errorType": "Runtime.HandlerError"}`
 	fmt.Fprintf(conn, "POST /2018-06-01/runtime/invocation/%s/error HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\n\r\n%s", requestID, c.host, len(errorPayload), errorPayload)
 	return nil
@@ -75,6 +75,7 @@ func (c *runtimeAPIClient) sendError(requestID, errorMsg string) error {
 func executeShellHandler(handlerFile, handlerFunc string, eventData []byte) ([]byte, error) {
 	cmd := exec.Command("bash", "-c", "source "+handlerFile+" && "+handlerFunc)
 	cmd.Stdin = strings.NewReader(string(eventData))
+	cmd.Stderr = os.Stderr
 	return cmd.Output()
 }
 
