@@ -1,0 +1,17 @@
+FROM public.ecr.aws/lambda/provided:al2023-arm64
+
+# Copy bootstrap to the expected location
+COPY --chmod=755 runtime/build/bootstrap /var/runtime/bootstrap
+
+# Copy handler
+COPY --chmod=755 app/src/handler.sh /var/task/handler.sh
+
+# Copy jq layer if it exists
+COPY --chmod=755 layers/jq/layer/opt/ /opt/
+
+# Set environment
+ENV LAMBDA_TASK_ROOT=/var/task
+ENV PATH=/opt/bin:$PATH
+ENV _HANDLER=handler.run
+
+CMD ["/var/runtime/bootstrap"]
