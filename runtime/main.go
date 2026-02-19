@@ -82,7 +82,13 @@ func executeShellHandler(handlerFile, handlerFunc string, eventData []byte) ([]b
 func main() {
 	runtimeAPI := os.Getenv("AWS_LAMBDA_RUNTIME_API")
 	handler := os.Getenv("_HANDLER")
+	if handler == "" {
+		handler = "handler.run"
+	}
 	parts := strings.Split(handler, ".")
+	if len(parts) < 2 {
+		parts = []string{"handler", "run"}
+	}
 	handlerFile := parts[0] + ".sh"
 	handlerFunc := parts[1]
 
