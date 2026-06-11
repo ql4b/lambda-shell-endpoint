@@ -433,6 +433,7 @@ JSON as contract.
 
 ## Related Projects
 
+- **[terraform-aws-lambda-shell-runtime-layer](https://github.com/ql4b/terraform-aws-lambda-shell-runtime-layer)** - The Terraform module that abstracts this entire setup. If you're starting fresh, use the module instead of cloning this repository — it handles the runtime layer, architecture selection, and layer provisioning for you.
 - **[echo](https://github.com/ql4b/echo)** - Configurable echo service using same runtime
 - **[qm4il](https://github.com/ql4b/qm4il)** - Email API built with shell-first architecture
 - **[lambda-shell-layers](https://github.com/ql4b/lambda-shell-layers)** - Additional CLI tool layers
